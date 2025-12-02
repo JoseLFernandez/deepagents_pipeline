@@ -1,0 +1,40 @@
+# Bytecode and caches
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python packaging / build artifacts
+*.egg-info/
+build/
+dist/
+
+# Node / frontend dependencies
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+# Environment and secret files
+.env
+.env.*
+*.env
+
+# Databases and local state
+*.db
+*.sqlite3
+
+# Results, logs, and artifacts
+results/
+logs/
+*.log
+
+# IDE / editor files
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,12 @@
+[project]
+name = "deepagents_pipeline"
+version = "0.1.0"
+description = "Modernized DeepAgents research pipeline package."
+authors = [
+    { name = "Your Name", email = "your@email.com" }
+]
+readme = "README.md"
+requires-python = ">=3.8"
+
+[tool.setuptools]
+package-dir = {"" = "."}
