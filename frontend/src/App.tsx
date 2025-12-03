@@ -233,13 +233,27 @@ function App() {
     );
   };
 
+  const decodeHtmlEntities = (value: string) => {
+    if (!value) return value;
+    if (typeof window === "undefined" || typeof DOMParser === "undefined") {
+      return value;
+    }
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(`<!doctype html><body>${value}</body>`, "text/html");
+    return doc.body.textContent || value;
+  };
+
   const renderChatContent = (msg: ChatEntry) => {
-    const trimmed = msg.content?.trim();
+    const baseContent = msg.content ?? "";
+    const decoded = msg.role === "user" ? baseContent : decodeHtmlEntities(baseContent);
+    const trimmed = decoded.trim();
     const looksLikeHtml = !!trimmed && /<[^>]+>/g.test(trimmed);
     if (msg.role !== "user" && looksLikeHtml) {
-      return <div className="collab-message__body" dangerouslySetInnerHTML={{ __html: trimmed }} />;
+      return (
+        <div className="collab-message__body" dangerouslySetInnerHTML={{ __html: trimmed }} />
+      );
     }
-    return <p>{msg.content}</p>;
+    return <p>{decoded}</p>;
   };
 
   const makeChatEntry = useCallback(

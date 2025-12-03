@@ -161,13 +161,25 @@ function App() {
             return;
         setChatInput((prev) => prev ? `${prev}\n\nFocus on this excerpt:\n${selectedFragmentText}` : selectedFragmentText);
     };
+    const decodeHtmlEntities = (value) => {
+        if (!value)
+            return value;
+        if (typeof window === "undefined" || typeof DOMParser === "undefined") {
+            return value;
+        }
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(`<!doctype html><body>${value}</body>`, "text/html");
+        return doc.body.textContent || value;
+    };
     const renderChatContent = (msg) => {
-        const trimmed = msg.content?.trim();
+        const baseContent = msg.content ?? "";
+        const decoded = msg.role === "user" ? baseContent : decodeHtmlEntities(baseContent);
+        const trimmed = decoded.trim();
         const looksLikeHtml = !!trimmed && /<[^>]+>/g.test(trimmed);
         if (msg.role !== "user" && looksLikeHtml) {
-            return _jsx("div", { className: "collab-message__body", dangerouslySetInnerHTML: { __html: trimmed } });
+            return (_jsx("div", { className: "collab-message__body", dangerouslySetInnerHTML: { __html: trimmed } }));
         }
-        return _jsx("p", { children: msg.content });
+        return _jsx("p", { children: decoded });
     };
     const makeChatEntry = useCallback((role, content, toolName, assetPath, snippet) => ({
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
