@@ -166,13 +166,21 @@ function App() {
             return "";
         if (typeof window === "undefined" || typeof DOMParser === "undefined")
             return value;
-        // First decode any escaped entities (e.g., &lt; -> <), then reparse as HTML so
-        // the collaboration pane renders the final formatted view (including images or figures).
+        // Decode any escaped HTML entities (including double-encoded strings) using a
+        // textarea, then reparse as HTML so the collaboration pane renders formatted
+        // output instead of raw tags.
+        const textarea = document.createElement("textarea");
+        let decoded = value;
+        for (let i = 0; i < 3; i++) {
+            textarea.innerHTML = decoded;
+            const next = textarea.value;
+            if (next === decoded)
+                break;
+            decoded = next;
+        }
         const parser = new DOMParser();
-        const decodedDoc = parser.parseFromString(value, "text/html");
-        const decodedText = decodedDoc.documentElement.textContent || value;
-        const reparsed = parser.parseFromString(decodedText, "text/html");
-        return rewriteMediaSources(reparsed.body.innerHTML || decodedText || value);
+        const reparsed = parser.parseFromString(decoded, "text/html");
+        return rewriteMediaSources(reparsed.body.innerHTML || decoded || value);
     };
     const renderChatContent = (msg) => {
         if (msg.role === "user") {
