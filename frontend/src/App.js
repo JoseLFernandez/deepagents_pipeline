@@ -163,23 +163,22 @@ function App() {
     };
     const decodeHtmlEntities = (value) => {
         if (!value)
+            return "";
+        if (typeof window === "undefined")
             return value;
-        if (typeof window === "undefined" || typeof DOMParser === "undefined") {
-            return value;
-        }
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(`<!doctype html><body>${value}</body>`, "text/html");
-        return doc.body.textContent || value;
+        const textarea = document.createElement("textarea");
+        textarea.innerHTML = value;
+        const firstPass = textarea.value || textarea.textContent || value;
+        textarea.innerHTML = firstPass;
+        const secondPass = textarea.value || textarea.textContent || firstPass;
+        return secondPass;
     };
     const renderChatContent = (msg) => {
-        const baseContent = msg.content ?? "";
-        const decoded = msg.role === "user" ? baseContent : decodeHtmlEntities(baseContent);
-        const trimmed = decoded.trim();
-        const looksLikeHtml = !!trimmed && /<[^>]+>/g.test(trimmed);
-        if (msg.role !== "user" && looksLikeHtml) {
-            return (_jsx("div", { className: "collab-message__body", dangerouslySetInnerHTML: { __html: trimmed } }));
+        if (msg.role === "user") {
+            return _jsx("p", { children: msg.content });
         }
-        return _jsx("p", { children: decoded });
+        const decoded = decodeHtmlEntities(msg.content ?? "").trim();
+        return (_jsx("div", { className: "collab-message__body", dangerouslySetInnerHTML: { __html: decoded } }));
     };
     const makeChatEntry = useCallback((role, content, toolName, assetPath, snippet) => ({
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
