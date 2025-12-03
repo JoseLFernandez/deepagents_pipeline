@@ -233,6 +233,15 @@ function App() {
     );
   };
 
+  const renderChatContent = (msg: ChatEntry) => {
+    const trimmed = msg.content?.trim();
+    const looksLikeHtml = !!trimmed && /<[^>]+>/g.test(trimmed);
+    if (msg.role !== "user" && looksLikeHtml) {
+      return <div className="collab-message__body" dangerouslySetInnerHTML={{ __html: trimmed }} />;
+    }
+    return <p>{msg.content}</p>;
+  };
+
   const makeChatEntry = useCallback(
     (
       role: ChatEntry["role"],
@@ -1010,10 +1019,10 @@ function App() {
                             </span>
                             <span>{msg.timestamp}</span>
                           </div>
-                          <p>{msg.content}</p>
+                          {renderChatContent(msg)}
                           {msg.snippet && (
                             <div
-                              className="collab-message_snippet"
+                              className="collab-message__snippet"
                               dangerouslySetInnerHTML={{ __html: msg.snippet }}
                             />
                           )}

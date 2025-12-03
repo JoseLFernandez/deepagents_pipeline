@@ -450,6 +450,16 @@ header h1 {
   margin-top: 0.25rem;
 }
 
+.collab-message__body {
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: #0f172a;
+}
+
+.collab-message__body p {
+  margin: 0 0 0.35rem;
+}
+
 .collab-message__snippet {
   margin-top: 0.35rem;
 }
