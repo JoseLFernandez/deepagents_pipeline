@@ -217,6 +217,51 @@ header h1 {
   gap: 1rem;
 }
 
+.section-meta {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.meta-pill {
+  background: #eef2ff;
+  color: #4338ca;
+  border-radius: 999px;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.8rem;
+  border: 1px solid #c7d2fe;
+}
+
+.section-quicksteps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.section-quicksteps p {
+  margin: 0.2rem 0 0;
+  color: #475569;
+  font-size: 0.9rem;
+}
+
+.studio-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .studio-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
 .section-editor__header {
   margin-bottom: 0.5rem;
 }
@@ -263,6 +308,12 @@ header h1 {
   background: #fff;
   margin-bottom: 0.75rem;
   overflow: auto;
+}
+
+.preview-empty {
+  color: #475569;
+  font-style: italic;
+  margin: 0;
 }
 
 .rich-preview {
