@@ -235,13 +235,15 @@ function App() {
 
   const decodeHtmlEntities = (value: string) => {
     if (!value) return "";
-    if (typeof window === "undefined") return value;
-    const textarea = document.createElement("textarea");
-    textarea.innerHTML = value;
-    const firstPass = textarea.value || textarea.textContent || value;
-    textarea.innerHTML = firstPass;
-    const secondPass = textarea.value || textarea.textContent || firstPass;
-    return secondPass;
+    if (typeof window === "undefined" || typeof DOMParser === "undefined") return value;
+
+    // First decode any escaped entities (e.g., &lt; -> <), then reparse as HTML so
+    // the collaboration pane renders the final formatted view (including images or figures).
+    const parser = new DOMParser();
+    const decodedDoc = parser.parseFromString(value, "text/html");
+    const decodedText = decodedDoc.documentElement.textContent || value;
+    const reparsed = parser.parseFromString(decodedText, "text/html");
+    return rewriteMediaSources(reparsed.body.innerHTML || decodedText || value);
   };
 
   const renderChatContent = (msg: ChatEntry) => {
