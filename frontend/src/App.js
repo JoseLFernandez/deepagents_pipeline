@@ -166,17 +166,18 @@ function App() {
             return "";
         if (typeof window === "undefined" || typeof DOMParser === "undefined")
             return value;
-        // Iteratively decode entities via DOMParser textContent to handle nested encodings,
+        // Decode nested entities without stripping tags by round-tripping through a textarea,
         // then reparse as HTML so assistant/tool responses render as formatted content.
-        const parser = new DOMParser();
+        const textarea = document.createElement("textarea");
         let decoded = value;
         for (let i = 0; i < 3; i++) {
-            const doc = parser.parseFromString(`<body>${decoded}</body>`, "text/html");
-            const next = doc.body.textContent ?? decoded;
+            textarea.innerHTML = decoded;
+            const next = textarea.value;
             if (next === decoded)
                 break;
             decoded = next;
         }
+        const parser = new DOMParser();
         const reparsed = parser.parseFromString(decoded, "text/html");
         return rewriteMediaSources(reparsed.body.innerHTML || decoded || value);
     };
