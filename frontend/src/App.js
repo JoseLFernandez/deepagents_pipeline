@@ -1,4 +1,4 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, API_BASE } from "./api";
 import { PhaseStepper } from "./components/PhaseStepper";
@@ -186,15 +186,16 @@ function App() {
             return _jsx("p", { children: msg.content });
         }
         const decoded = decodeHtmlEntities(msg.content ?? "").trim();
-        return (_jsx("div", { className: "collab-message__body", dangerouslySetInnerHTML: { __html: decoded } }));
+        return (_jsxs(_Fragment, { children: [_jsx("div", { className: "collab-message__body", dangerouslySetInnerHTML: { __html: decoded } }), msg.chainOfThought?.length ? (_jsxs("details", { className: "collab-message__thoughts", children: [_jsx("summary", { children: "Agent chain of thought" }), _jsx("ol", { children: msg.chainOfThought.map((thought, idx) => (_jsx("li", { children: thought }, `${msg.id}-thought-${idx}`))) })] })) : null] }));
     };
-    const makeChatEntry = useCallback((role, content, toolName, assetPath, snippet) => ({
+    const makeChatEntry = useCallback((role, content, toolName, assetPath, snippet, chainOfThought) => ({
         id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
         role,
         content,
         toolName,
         assetPath,
         snippet,
+        chainOfThought,
         timestamp: new Date().toLocaleTimeString(),
     }), []);
     const appendChatEntry = useCallback((entry) => {
@@ -384,7 +385,7 @@ function App() {
                     model_name: modelName,
                     messages: messagesForApi(nextMessages),
                 });
-                appendChatEntry(makeChatEntry("assistant", res.message));
+                appendChatEntry(makeChatEntry("assistant", res.message, undefined, undefined, undefined, res.chain_of_thought));
             }
             catch (error) {
                 setStatus(error instanceof Error ? error.message : String(error));

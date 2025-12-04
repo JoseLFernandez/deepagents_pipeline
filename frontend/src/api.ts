@@ -62,7 +62,7 @@ export const api = {
     model_name?: string;
     messages: ChatMessagePayload[];
   }) =>
-    request<{ message: string }>("/section/chat", {
+    request<{ message: string; chain_of_thought?: string[] }>("/section/chat", {
       method: "POST",
       body: JSON.stringify(payload),
     }),

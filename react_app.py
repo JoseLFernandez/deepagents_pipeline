@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 import difflib
-import json
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -676,8 +675,26 @@ def section_diff(payload: SectionDiffRequest) -> Dict[str, str]:
     }
 
 
+def _parse_chat_reply(response: Any) -> Tuple[str, List[str]]:
+    raw_content = getattr(response, "content", str(response))
+    message_text = raw_content if isinstance(raw_content, str) else str(raw_content)
+    chain: List[str] = []
+    try:
+        parsed = json.loads(message_text)
+        if isinstance(parsed, dict) and "message" in parsed:
+            message_text = str(parsed.get("message", "")).strip() or message_text
+            chain_raw = parsed.get("chain_of_thought") or []
+            if isinstance(chain_raw, str):
+                chain_raw = [chain_raw]
+            if isinstance(chain_raw, list):
+                chain = [str(item).strip() for item in chain_raw if str(item).strip()]
+    except Exception:
+        pass
+    return message_text.strip(), chain
+
+
 @app.post("/section/chat")
-def section_chat(payload: SectionChatRequest) -> Dict[str, str]:
+def section_chat(payload: SectionChatRequest) -> Dict[str, Any]:
     slug = _slug_from_identifier(payload.context_path)
     with Session(engine) as session_db:
         topic = session_db.exec(select(Topic).where(Topic.slug == slug)).one_or_none()
@@ -690,7 +707,12 @@ def section_chat(payload: SectionChatRequest) -> Dict[str, str]:
     system_prompt = textwrap.dedent(
         f"""
         You are collaborating with a critique agent to refine a research document.
-        Stay consistent with the provided outline and section HTML.
+        Stay consistent with the provided outline and section HTML. Always return
+        JSON with two keys:
+        - "message": the final assistant reply with any HTML formatting preserved.
+        - "chain_of_thought": an array of up to five short bullet-style sentences
+          that summarize your reasoning. Keep each element concise and avoid
+          duplicating the final answer.
 
         Outline:
         {outline_text or 'No outline available.'}
@@ -707,10 +729,10 @@ def section_chat(payload: SectionChatRequest) -> Dict[str, str]:
             content = f"[Tool: {msg.tool_name}]\n{content}"
         messages.append({"role": role, "content": content})
     response = model.invoke(messages)
-    reply = getattr(response, "content", str(response)).strip()
+    reply, chain = _parse_chat_reply(response)
     if not reply:
         reply = "I do not have new suggestions yet. Could you provide more context?"
-    return {"message": reply}
+    return {"message": reply, "chain_of_thought": chain}
 
 
 @app.post("/section/llm_rewrite")

@@ -29,6 +29,7 @@ type ChatEntry = {
   toolName?: string;
   assetPath?: string;
   snippet?: string;
+  chainOfThought?: string[];
 };
 
 type ChatMode =
@@ -259,7 +260,19 @@ function App() {
     }
     const decoded = decodeHtmlEntities(msg.content ?? "").trim();
     return (
-      <div className="collab-message__body" dangerouslySetInnerHTML={{ __html: decoded }} />
+      <>
+        <div className="collab-message__body" dangerouslySetInnerHTML={{ __html: decoded }} />
+        {msg.chainOfThought?.length ? (
+          <details className="collab-message__thoughts">
+            <summary>Agent chain of thought</summary>
+            <ol>
+              {msg.chainOfThought.map((thought, idx) => (
+                <li key={`${msg.id}-thought-${idx}`}>{thought}</li>
+              ))}
+            </ol>
+          </details>
+        ) : null}
+      </>
     );
   };
 
@@ -269,7 +282,8 @@ function App() {
       content: string,
       toolName?: string,
       assetPath?: string,
-      snippet?: string
+      snippet?: string,
+      chainOfThought?: string[]
     ): ChatEntry => ({
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       role,
@@ -277,6 +291,7 @@ function App() {
       toolName,
       assetPath,
       snippet,
+      chainOfThought,
       timestamp: new Date().toLocaleTimeString(),
     }),
     []
@@ -511,7 +526,7 @@ function App() {
           model_name: modelName,
           messages: messagesForApi(nextMessages),
         });
-        appendChatEntry(makeChatEntry("assistant", res.message));
+        appendChatEntry(makeChatEntry("assistant", res.message, undefined, undefined, undefined, res.chain_of_thought));
       } catch (error) {
         setStatus(error instanceof Error ? error.message : String(error));
       } finally {
