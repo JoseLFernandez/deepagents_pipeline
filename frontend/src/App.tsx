@@ -237,19 +237,17 @@ function App() {
     if (!value) return "";
     if (typeof window === "undefined" || typeof DOMParser === "undefined") return value;
 
-    // Decode any escaped HTML entities (including double-encoded strings) using a
-    // textarea, then reparse as HTML so the collaboration pane renders formatted
-    // output instead of raw tags.
-    const textarea = document.createElement("textarea");
+    // Iteratively decode entities via DOMParser textContent to handle nested encodings,
+    // then reparse as HTML so assistant/tool responses render as formatted content.
+    const parser = new DOMParser();
     let decoded = value;
     for (let i = 0; i < 3; i++) {
-      textarea.innerHTML = decoded;
-      const next = textarea.value;
+      const doc = parser.parseFromString(`<body>${decoded}</body>`, "text/html");
+      const next = doc.body.textContent ?? decoded;
       if (next === decoded) break;
       decoded = next;
     }
 
-    const parser = new DOMParser();
     const reparsed = parser.parseFromString(decoded, "text/html");
     return rewriteMediaSources(reparsed.body.innerHTML || decoded || value);
   };
