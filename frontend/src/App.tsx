@@ -975,7 +975,11 @@ function App() {
                         </span>
                         <span>{msg.timestamp}</span>
                       </div>
-                      <p>{msg.content}</p>
+                      {msg.role === "assistant" || msg.role === "tool" ? (
+                        <div dangerouslySetInnerHTML={{ __html: msg.content }} />
+                      ) : (
+                        <p>{msg.content}</p>
+                      )}
                       {msg.snippet && (
                         <div
                           className="collab-message\_snippet"
