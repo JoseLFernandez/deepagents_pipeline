@@ -208,6 +208,11 @@ function App() {
     [sections, selectedSection]
   );
 
+  const sectionWordCount = useMemo(() => {
+    if (!sectionBody.trim()) return 0;
+    return sectionBody.trim().split(/\s+/).length;
+  }, [sectionBody]);
+
   const selectFragmentById = useCallback(
     (fragmentId: string | null) => {
       setSelectedFragmentId(fragmentId);
@@ -225,6 +230,35 @@ function App() {
     if (!selectedFragmentText) return;
     setChatInput((prev) =>
       prev ? `${prev}\n\nFocus on this excerpt:\n${selectedFragmentText}` : selectedFragmentText
+    );
+  };
+
+  const decodeHtmlEntities = (value: string) => {
+    if (!value) return "";
+    if (typeof window === "undefined" || typeof DOMParser === "undefined") return value;
+
+    // Iteratively decode entities via DOMParser textContent to handle nested encodings,
+    // then reparse as HTML so assistant/tool responses render as formatted content.
+    const parser = new DOMParser();
+    let decoded = value;
+    for (let i = 0; i < 3; i++) {
+      const doc = parser.parseFromString(`<body>${decoded}</body>`, "text/html");
+      const next = doc.body.textContent ?? decoded;
+      if (next === decoded) break;
+      decoded = next;
+    }
+
+    const reparsed = parser.parseFromString(decoded, "text/html");
+    return rewriteMediaSources(reparsed.body.innerHTML || decoded || value);
+  };
+
+  const renderChatContent = (msg: ChatEntry) => {
+    if (msg.role === "user") {
+      return <p>{msg.content}</p>;
+    }
+    const decoded = decodeHtmlEntities(msg.content ?? "").trim();
+    return (
+      <div className="collab-message__body" dangerouslySetInnerHTML={{ __html: decoded }} />
     );
   };
 
@@ -852,178 +886,210 @@ function App() {
                   : "Select a section from the navigator to start editing."}
               </p>
             </div>
-          </div>
-          <div className="canvas-panel">
-            <div className="canvas-panel__title">Rendered Preview</div>
-            <div
-              ref={previewRef}
-              className="preview-pane rich-preview"
-              onClick={handlePreviewClick}
-              dangerouslySetInnerHTML={{ __html: instrumentedPreview }}
-            />
-          </div>
-          <p className="preview-hint">
-            Click any paragraph to focus the LLM on that excerpt. All updates flow through the
-            collaboration panel.
-          </p>
-          <div className="section-editor__toolbar">
-            <div className="button-row">
-              <button
-                onClick={handleSaveSection}
-                disabled={loading || selectedSection == null || !contextSlug}
-              >
-                Save Section Changes
-              </button>
-              <button
-                onClick={handlePromote}
-                disabled={loading || selectedSection == null || !contextSlug}
-              >
-                Promote Working to Original
-              </button>
-              <button
-                type="button"
-                className="ghost-button"
-                onClick={handleRestoreSection}
-                disabled={sectionBody === lastSavedBody}
-              >
-                Restore last saved
-              </button>
+            <div className="section-meta">
+              <span className="meta-pill">Live preview</span>
+              <span className="meta-pill">
+                {docPerspective === "working" ? "Working draft" : "Original baseline"}
+              </span>
+              <span className="meta-pill">{sectionWordCount} words</span>
             </div>
-            <p className="toolbar-hint">
-              Save to persist this version. Restore brings back the most recently saved draft.
-            </p>
+          </div>
+          <div className="section-quicksteps">
+            <div>
+              <strong>1. Target a paragraph</strong>
+              <p>Click anywhere in the preview to focus edits or keep it blank to edit the whole section.</p>
+            </div>
+            <div>
+              <strong>2. Ask or apply changes</strong>
+              <p>Send a prompt or push the latest plan to rewrite the section automatically.</p>
+            </div>
+            <div>
+              <strong>3. Save or promote</strong>
+              <p>Persist updates, then promote the working draft to refresh the original baseline.</p>
+            </div>
           </div>
 
-          <div className="llm-panel">
-            <h3>LLM + Collaboration</h3>
-            {selectedFragmentText ? (
-              <div className="selected-fragment">
-                <div className="selected-fragment__header">
-                  <strong>Focused excerpt</strong>
-                  <button type="button" onClick={() => selectFragmentById(null)}>
-                    Clear
-                  </button>
-                </div>
-                <p>{selectedFragmentText}</p>
-                <div className="selected-fragment__actions">
-                  <button type="button" onClick={pushExcerptToChat}>
-                    Insert excerpt into message
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p className="selected-fragment__empty">
-                Click any paragraph in the preview to target LLM edits or leave it blank to edit the whole
-                section.
-              </p>
-            )}
-            {pendingSnippet && (
-              <div className="pending-snippet">
-                <div className="pending-snippet__header">
-                  <strong>Pending diagram change</strong>
-                </div>
+          <div className="studio-layout">
+            <div className="studio-layout__column">
+              <div className="canvas-panel">
+                <div className="canvas-panel__title">Rendered Preview</div>
                 <div
-                  className="pending-snippet__preview"
-                  dangerouslySetInnerHTML={{ __html: pendingSnippet }}
+                  ref={previewRef}
+                  className="preview-pane rich-preview"
+                  onClick={handlePreviewClick}
+                  dangerouslySetInnerHTML={{
+                    __html:
+                      instrumentedPreview ||
+                      "<p class='preview-empty'>Select a section to load a live preview.</p>",
+                  }}
                 />
-                <div className="pending-snippet__note">
-                  <label>
-                    Placement instructions (optional)
-                    <textarea
-                      value={pendingPlacementNote}
-                      onChange={(e) => setPendingPlacementNote(e.target.value)}
-                      placeholder="e.g., Place this figure after the Planner paragraph."
-                    />
-                  </label>
-                  <p className="pending-snippet__hint">
-                    Tip: select a paragraph in the preview to pinpoint the target, then accept or let
-                    the LLM handle the placement.
-                  </p>
-                </div>
-                <div className="pending-snippet__actions">
-                  <button type="button" onClick={handleAcceptPendingSnippet}>
-                    Accept change
+              </div>
+              <p className="preview-hint">
+                Click any paragraph to focus the LLM on that excerpt. All updates flow through the
+                collaboration panel.
+              </p>
+              <div className="section-editor__toolbar">
+                <div className="button-row">
+                  <button
+                    onClick={handleSaveSection}
+                    disabled={loading || selectedSection == null || !contextSlug}
+                  >
+                    Save Section Changes
                   </button>
-                  <button type="button" className="ghost-button" onClick={handleRejectPendingSnippet}>
-                    Reject change
+                  <button
+                    onClick={handlePromote}
+                    disabled={loading || selectedSection == null || !contextSlug}
+                  >
+                    Promote Working to Original
                   </button>
                   <button
                     type="button"
-                    onClick={handleLLMPlacement}
-                    disabled={!contextSlug || selectedSection == null || !pendingSnippet || loading}
+                    className="ghost-button"
+                    onClick={handleRestoreSection}
+                    disabled={sectionBody === lastSavedBody}
                   >
-                    Ask LLM to place diagram
+                    Restore last saved
                   </button>
                 </div>
-              </div>
-            )}
-            <div className="collab-history">
-              <h4>Conversation</h4>
-              {chatMessages.length ? (
-                <ul>
-                  {chatMessages.map((msg) => (
-                    <li key={msg.id} className={`collab-message ${msg.role}`}>
-                      <div className="collab-message__meta">
-                        <span className="collab-message__role">
-                          {msg.role === "user"
-                            ? "Critique Agent"
-                            : msg.role === "assistant"
-                            ? "Reasoning LLM"
-                            : msg.toolName
-                            ? `Tool • ${msg.toolName}`
-                            : "Tool"}
-                        </span>
-                        <span>{msg.timestamp}</span>
-                      </div>
-                      <p>{msg.content}</p>
-                      {msg.snippet && (
-                        <div
-                          className="collab-message\_snippet"
-                          dangerouslySetInnerHTML={{ __html: msg.snippet }}
-                        />
-                      )}
-                      {msg.assetPath && (
-                        <p className="collab-message__asset">
-                          Asset saved at: <code>{msg.assetPath}</code>
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="collab-message__empty">
-                  Ask the reasoning LLM for ideas or run a tool to start the conversation.
+                <p className="toolbar-hint">
+                  Save to persist this version. Restore brings back the most recently saved draft.
                 </p>
-              )}
+              </div>
             </div>
-            <div className="chat-composer">
-              <label>
-                Action
-                <select value={chatMode} onChange={(e) => setChatMode(e.target.value as ChatMode)}>
-                  {Object.entries(chatModeLabels).map(([value, meta]) => (
-                    <option key={value} value={value}>
-                      {meta.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <textarea
-                placeholder={chatModeLabels[chatMode].placeholder}
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                rows={chatMode === "chat" ? 4 : 3}
-                disabled={chatLoading}
-              />
-              <button onClick={handleSendChatMessage} disabled={chatLoading}>
-                {chatLoading ? "Working..." : chatModeLabels[chatMode].button}
-              </button>
+
+            <div className="studio-layout__column">
+              <div className="llm-panel">
+                <h3>LLM + Collaboration</h3>
+                {selectedFragmentText ? (
+                  <div className="selected-fragment">
+                    <div className="selected-fragment__header">
+                      <strong>Focused excerpt</strong>
+                      <button type="button" onClick={() => selectFragmentById(null)}>
+                        Clear
+                      </button>
+                    </div>
+                    <p>{selectedFragmentText}</p>
+                    <div className="selected-fragment__actions">
+                      <button type="button" onClick={pushExcerptToChat}>
+                        Insert excerpt into message
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="selected-fragment__empty">
+                    Click any paragraph in the preview to target LLM edits or leave it blank to edit the
+                    whole section.
+                  </p>
+                )}
+                {pendingSnippet && (
+                  <div className="pending-snippet">
+                    <div className="pending-snippet__header">
+                      <strong>Pending diagram change</strong>
+                    </div>
+                    <div
+                      className="pending-snippet__preview"
+                      dangerouslySetInnerHTML={{ __html: pendingSnippet }}
+                    />
+                    <div className="pending-snippet__note">
+                      <label>
+                        Placement instructions (optional)
+                        <textarea
+                          value={pendingPlacementNote}
+                          onChange={(e) => setPendingPlacementNote(e.target.value)}
+                          placeholder="e.g., Place this figure after the Planner paragraph."
+                        />
+                      </label>
+                      <p className="pending-snippet__hint">
+                        Tip: select a paragraph in the preview to pinpoint the target, then accept or let the
+                        LLM handle the placement.
+                      </p>
+                    </div>
+                    <div className="pending-snippet__actions">
+                      <button type="button" onClick={handleAcceptPendingSnippet}>
+                        Accept change
+                      </button>
+                      <button type="button" className="ghost-button" onClick={handleRejectPendingSnippet}>
+                        Reject change
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleLLMPlacement}
+                        disabled={!contextSlug || selectedSection == null || !pendingSnippet || loading}
+                      >
+                        Ask LLM to place diagram
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <div className="collab-history">
+                  <h4>Conversation</h4>
+                  {chatMessages.length ? (
+                    <ul>
+                      {chatMessages.map((msg) => (
+                        <li key={msg.id} className={`collab-message ${msg.role}`}>
+                          <div className="collab-message__meta">
+                            <span className="collab-message__role">
+                              {msg.role === "user"
+                                ? "Critique Agent"
+                                : msg.role === "assistant"
+                                ? "Reasoning LLM"
+                                : msg.toolName
+                                ? `Tool • ${msg.toolName}`
+                                : "Tool"}
+                            </span>
+                            <span>{msg.timestamp}</span>
+                          </div>
+                          {renderChatContent(msg)}
+                          {msg.snippet && (
+                            <div
+                              className="collab-message__snippet"
+                              dangerouslySetInnerHTML={{ __html: msg.snippet }}
+                            />
+                          )}
+                          {msg.assetPath && (
+                            <p className="collab-message__asset">
+                              Asset saved at: <code>{msg.assetPath}</code>
+                            </p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="collab-message__empty">
+                      Ask the reasoning LLM for ideas or run a tool to start the conversation.
+                    </p>
+                  )}
+                </div>
+                <div className="chat-composer">
+                  <label>
+                    Action
+                    <select value={chatMode} onChange={(e) => setChatMode(e.target.value as ChatMode)}>
+                      {Object.entries(chatModeLabels).map(([value, meta]) => (
+                        <option key={value} value={value}>
+                          {meta.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <textarea
+                    placeholder={chatModeLabels[chatMode].placeholder}
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    rows={chatMode === "chat" ? 4 : 3}
+                    disabled={chatLoading}
+                  />
+                  <button onClick={handleSendChatMessage} disabled={chatLoading}>
+                    {chatLoading ? "Working..." : chatModeLabels[chatMode].button}
+                  </button>
+                </div>
+                <button
+                  onClick={handleLLMRewrite}
+                  disabled={loading || selectedSection == null || !contextSlug}
+                >
+                  Apply latest plan to section
+                </button>
+              </div>
             </div>
-            <button
-              onClick={handleLLMRewrite}
-              disabled={loading || selectedSection == null || !contextSlug}
-            >
-              Apply latest plan to section
-            </button>
           </div>
         </div>
       </section>
