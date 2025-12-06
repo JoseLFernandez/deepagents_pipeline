@@ -39,6 +39,7 @@ class AppSettings:
     )
     serper_api_key: str = field(default_factory=lambda: _env("SERPER_API_KEY"))
     github_token: str = field(default_factory=lambda: _env("GITHUB_CLI_TOKEN"))
+    picsart_api_key: str = field(default_factory=lambda: _env("PICSART_API_KEY"))
     default_model: str = field(
         default_factory=lambda: _env("DEEPAGENT_DEFAULT_MODEL", "ollama:llama3")
     )

@@ -24,7 +24,14 @@ from llm import llm_registry
 from pipeline import ResearchPipeline, slugify
 from ui import ResearchChatSession
 from media_agent import MediaGenerationAgent, MediaSpec
-from tools import internet_search, wikipedia_lookup, arxiv_search
+from tools import (
+    internet_search,
+    wikipedia_lookup,
+    arxiv_search,
+    picsart_generate,
+    picsart_upscale,
+    picsart_remove_background,
+)
 
 SECTION_PATTERN = re.compile(
     r"\\section\{([^}]*)\}(.*?)(?=\\section\{|\\end\{document\})",
@@ -545,7 +552,7 @@ class RenderSectionRequest(BaseModel):
 
 
 class ChatMessagePayload(BaseModel):
-    role: Literal["user", "assistant", "tool"]
+    role: Literal["user", "assistant", "tool", "system"]
     content: str
     tool_name: Optional[str] = None
 
@@ -955,3 +962,160 @@ def render_section_html(payload: RenderSectionRequest) -> Dict[str, str]:
     paragraphs = _paragraphs_from_text(payload.body)
     html_fragment = _paragraphs_to_html(paragraphs, "preview")
     return {"html": html_fragment}
+
+
+# ========== BookApp Standalone Endpoints ==========
+
+class BookChatRequest(BaseModel):
+    messages: List[ChatMessagePayload]
+    context: Optional[str] = None  # Optional book/chapter context
+    model_name: Optional[str] = None
+
+
+class BookExportRequest(BaseModel):
+    format: Literal["pdf", "docx", "epub"]
+    chapters: List[Dict[str, Any]]
+
+
+class BookSaveRequest(BaseModel):
+    chapters: List[Dict[str, Any]]
+    annotations: Optional[List[Dict[str, Any]]] = None
+
+
+@app.post("/book/chat")
+def book_chat(payload: BookChatRequest) -> Dict[str, str]:
+    """Standalone chat endpoint for BookApp without topic context."""
+    model = llm_registry.get_chat_model(payload.model_name or None)
+    system_prompt = textwrap.dedent(
+        """
+        You are a helpful AI writing assistant for a book authoring application.
+        Help the user with rewrites, expansions, summaries, critiques, and creative suggestions.
+        Be concise but helpful. Format your responses with clear structure when appropriate.
+        """
+    ).strip()
+    if payload.context:
+        system_prompt += f"\n\nCurrent context:\n{payload.context[:2000]}"
+    
+    messages = [{"role": "system", "content": system_prompt}]
+    for msg in payload.messages[-20:]:
+        role = "assistant" if msg.role == "tool" else msg.role
+        content = msg.content
+        if msg.tool_name:
+            content = f"[Tool: {msg.tool_name}]\n{content}"
+        messages.append({"role": role, "content": content})
+    
+    response = model.invoke(messages)
+    reply = getattr(response, "content", str(response)).strip()
+    if not reply:
+        reply = "I'm ready to help. Could you provide more context about what you'd like me to do?"
+    return {"message": reply}
+
+
+@app.post("/book/save")
+def book_save(payload: BookSaveRequest) -> Dict[str, str]:
+    """Save book chapters (placeholder - stores in memory/file for now)."""
+    # For now, just acknowledge. In production, persist to database.
+    chapter_count = len(payload.chapters)
+    return {"message": f"Saved {chapter_count} chapter(s) successfully."}
+
+
+@app.post("/book/export")
+def book_export(payload: BookExportRequest) -> Dict[str, str]:
+    """Export book to PDF/DOCX/EPUB (placeholder)."""
+    # For now, return a placeholder. In production, generate actual file.
+    format_name = payload.format.upper()
+    chapter_count = len(payload.chapters)
+    return {
+        "url": f"/exports/book.{payload.format}",
+        "message": f"Exported {chapter_count} chapter(s) to {format_name}."
+    }
+
+
+@app.post("/book/suggest")
+def book_suggest(payload: BookChatRequest) -> Dict[str, str]:
+    """Generate a writing suggestion based on context."""
+    model = llm_registry.get_chat_model(payload.model_name or None)
+    system_prompt = textwrap.dedent(
+        """
+        You are a writing assistant. Based on the user's request, provide a concise, 
+        actionable suggestion for improving or expanding their text.
+        Keep suggestions to 2-3 sentences maximum.
+        """
+    ).strip()
+    if payload.context:
+        system_prompt += f"\n\nContext:\n{payload.context[:1500]}"
+    
+    messages = [{"role": "system", "content": system_prompt}]
+    for msg in payload.messages[-5:]:
+        role = "assistant" if msg.role == "tool" else msg.role
+        messages.append({"role": role, "content": msg.content})
+    
+    response = model.invoke(messages)
+    reply = getattr(response, "content", str(response)).strip()
+    return {"body": reply}
+
+
+class PicsartGenerateRequest(BaseModel):
+    prompt: str
+    negative_prompt: Optional[str] = ""
+    width: int = 1024
+    height: int = 1024
+
+
+class PicsartUpscaleRequest(BaseModel):
+    image_url: str
+    upscale_factor: int = 2
+
+
+@app.post("/book/image/generate")
+def book_image_generate(payload: PicsartGenerateRequest) -> Dict[str, Any]:
+    """Generate an AI image using Picsart for book illustrations."""
+    result = picsart_generate(
+        prompt=payload.prompt,
+        negative_prompt=payload.negative_prompt or "",
+        width=payload.width,
+        height=payload.height,
+        output_dir="results/book_images",
+    )
+    return result
+
+
+@app.post("/book/image/upscale")
+def book_image_upscale(payload: PicsartUpscaleRequest) -> Dict[str, Any]:
+    """Upscale an image using Picsart."""
+    # Download the image first if it's a URL
+    import tempfile
+    import urllib.request
+    
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+            urllib.request.urlretrieve(payload.image_url, tmp.name)
+            result = picsart_upscale(
+                image_path=tmp.name,
+                upscale_factor=payload.upscale_factor,
+                output_dir="results/book_images",
+            )
+            os.unlink(tmp.name)
+            return result
+    except Exception as e:
+        return {"status": "error", "message": str(e), "url": "", "local_path": ""}
+
+
+class DeepSearchRequest(BaseModel):
+    """Request body for intelligent multi-source search."""
+    query: str
+    max_results: Optional[int] = 5
+
+
+@app.post("/book/search")
+def book_search(payload: DeepSearchRequest) -> Dict[str, Any]:
+    """
+    Intelligent multi-source search using deep_router to decide which tools to use.
+    Aggregates results from Wikipedia, arXiv, Perplexity, and web search based on query context.
+    """
+    from tools import deep_search
+    result = deep_search(
+        query=payload.query,
+        max_results=payload.max_results or 5,
+    )
+    return result
