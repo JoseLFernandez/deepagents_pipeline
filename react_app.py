@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Literal, Optional, Tuple
 import difflib
 import json
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -1119,3 +1119,9 @@ def book_search(payload: DeepSearchRequest) -> Dict[str, Any]:
         max_results=payload.max_results or 5,
     )
     return result
+
+
+@app.options("/book/search")
+def book_search_options() -> Response:
+    """Handle CORS preflight checks for /book/search."""
+    return Response(status_code=200)
